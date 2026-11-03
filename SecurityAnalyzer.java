@@ -1,16 +1,19 @@
 
-
 import java.io.*;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
+import java.time.*;
+import java.time.format.*;
 import java.util.*;
 
 public class SecurityAnalyzer {
 
     public static void analyze(String fileName) {
 
-        Map<String, Integer> failedAttempts = new HashMap<>();
+        Map<String, Integer> attempts = new HashMap<>();
+
+        Set<String> alertedIPs = new HashSet<>();
+
+        DateTimeFormatter formatter =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         try (BufferedReader br =
              new BufferedReader(new FileReader(fileName))) {
@@ -24,22 +27,34 @@ public class SecurityAnalyzer {
                 if (data.length != 4) continue;
 
                 LocalDateTime dateTime =
-                    LocalDateTime.parse(
-                        data[0].trim(),
-                        DateTimeFormatter.ofPattern(
-                            "yyyy-MM-dd HH:mm:ss"
-                        )
-                    );
+                    LocalDateTime.parse(data[0].trim(), formatter);
 
                 String username = data[1].trim();
                 String ip = data[2].trim();
                 String status = data[3].trim();
 
-                if (status.equals("FAILED")) {
-                    failedAttempts.put(
-                        ip,
-                        failedAttempts.getOrDefault(ip, 0) + 1
-                    );
+                LogDatabase.saveLog(
+                    username, ip, status, dateTime
+                );
+
+                if (status.equalsIgnoreCase("FAILED")) {
+
+                    int count = attempts.getOrDefault(ip, 0) + 1;
+                    attempts.put(ip, count);
+
+                    if (count == 5) {
+
+                        System.out.println("HIGH RISK ALERT: " + ip);
+
+                        AlertDatabase.saveAlert(
+                            username,
+                            ip,
+                            "REPEATED LOGIN",
+                            "Five failed login attempts detected"
+                        );
+
+                        alertedIPs.add(ip);
+                    }
                 }
 
                 LocalTime time = dateTime.toLocalTime();
@@ -47,30 +62,22 @@ public class SecurityAnalyzer {
                 if (time.isBefore(LocalTime.of(6, 0))
                     || !time.isBefore(LocalTime.of(22, 0))) {
 
-                    System.out.println(
-                        "SUSPICIOUS TIME ALERT: " + username
+                    System.out.println("SUSPICIOUS TIME: " + time);
+
+                    AlertDatabase.saveAlert(
+                        username,
+                        ip,
+                        "ODD TIMESTAMP",
+                        "Login outside normal hours"
                     );
-
-                    System.out.println("IP: " + ip);
-                    System.out.println("Time: " + time);
                 }
             }
 
-            System.out.println("\n===== SECURITY ALERTS =====");
-
-            for (String ip : failedAttempts.keySet()) {
-
-                int attempts = failedAttempts.get(ip);
-
-                if (attempts >= 5) {
-                    System.out.println("HIGH RISK ALERT");
-                    System.out.println("IP: " + ip);
-                    System.out.println("Attempts: " + attempts);
-                }
-            }
+            System.out.println("Total suspicious IPs: "
+                               + alertedIPs.size());
 
         } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("Analysis Error: " + e.getMessage());
         }
     }
 }
