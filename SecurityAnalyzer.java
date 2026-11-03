@@ -1,5 +1,9 @@
 
+
 import java.io.*;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class SecurityAnalyzer {
@@ -17,24 +21,38 @@ public class SecurityAnalyzer {
 
                 String[] data = line.split(",");
 
-                if (data.length != 4) {
-                    continue;
-                }
+                if (data.length != 4) continue;
+
+                LocalDateTime dateTime =
+                    LocalDateTime.parse(
+                        data[0].trim(),
+                        DateTimeFormatter.ofPattern(
+                            "yyyy-MM-dd HH:mm:ss"
+                        )
+                    );
 
                 String username = data[1].trim();
                 String ip = data[2].trim();
                 String status = data[3].trim();
 
                 if (status.equals("FAILED")) {
-
-                    System.out.println(
-                        "Failed Login: " + username
-                    );
-
                     failedAttempts.put(
                         ip,
                         failedAttempts.getOrDefault(ip, 0) + 1
                     );
+                }
+
+                LocalTime time = dateTime.toLocalTime();
+
+                if (time.isBefore(LocalTime.of(6, 0))
+                    || !time.isBefore(LocalTime.of(22, 0))) {
+
+                    System.out.println(
+                        "SUSPICIOUS TIME ALERT: " + username
+                    );
+
+                    System.out.println("IP: " + ip);
+                    System.out.println("Time: " + time);
                 }
             }
 
@@ -45,13 +63,13 @@ public class SecurityAnalyzer {
                 int attempts = failedAttempts.get(ip);
 
                 if (attempts >= 5) {
-                    System.out.println("HIGH RISK ALERT!");
+                    System.out.println("HIGH RISK ALERT");
                     System.out.println("IP: " + ip);
-                    System.out.println("Failed Attempts: " + attempts);
+                    System.out.println("Attempts: " + attempts);
                 }
             }
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             System.out.println("Error: " + e.getMessage());
         }
     }
